@@ -44,7 +44,6 @@ reference_df['label'] = reference_df['label'].astype(str) #labels 'A','N','O','~
 cate = pd.Categorical(reference_df['label'])
 reference_df['label_code'] = cate.codes #corresponding label code 
 
-
 """# Utils function"""
 
 # Keep 20% of the data out for validation
@@ -81,23 +80,23 @@ reference_df[reference_df.index==file_name].iloc[0]['label']
 
 # Plot a Normal ECG
 file_name = 'A00001'.encode()
-normal_data = load_data(file_name, data_dir)
-plot_ecg(normal_data)
+normal_data, lbl = preprocessing.load_data(file_name, data_dir)
+preprocessing.plot_ecg(normal_data, lbl)
 
 # Plot an Afib ECG
 file_name = 'A00005'.encode()
-afib_data = load_data(file_name, data_dir)
-plot_ecg(afib_data)
+afib_data, lbl  = lpreprocessing.oad_data(file_name, data_dir)
+preprocessing.plot_ecg(afib_data, lbl)
 
 # Plot an Abnormal ECG
 file_name = 'A00013'.encode()
-abn_data = load_data(file_name, data_dir)
-plot_ecg(abn_data)
+abn_data, lbl  = preprocessing.load_data(file_name, data_dir)
+preprocessing.plot_ecg(abn_data, lbl )
 
 # Plot an Noisy ECG
 file_name = 'A00022'.encode()
-noisy_data,lbl = (file_name, data_dir)
-plot_ecg(noisy_data)
+noisy_data,lbl = preprocessing.load_data(file_name, data_dir)
+preprocessing.plot_ecg(noisy_data, lbl )
 
 """# Preprocessing"""
 
@@ -105,31 +104,23 @@ plot_ecg(noisy_data)
 file_name = 'A00001'.encode()
 
 # Load the data and apply the baseline wander removal   
-data = load_data(file_name, data_dir)
-filt_data = baseline_wander_removal(data)
+data,lbl  = preprocessing.load_data(file_name, data_dir)
+filt_data = preprocessing.baseline_wander_removal(data)
 
-plt.figure()
-plt.plot(data, color='b')
-plt.title('{} - Before baseline wander removal'.format(file_name))
-plt.figure()
-plt.plot(filt_data, color='b')
-plt.title('{} - After baseline wander removal'.format(file_name))
+preprocessing.plot_ecg(data,lbl)
+preprocessing.plot_ecg(filt_data,lbl)
 
 """## Normalisation"""
     
 file_name = 'A00001'.encode()
 
 # Load the data, apply the baseline wander removal and normalize the data
-data = load_data(file_name, data_dir)
-filt_data = baseline_wander_removal(data)
-norm_data = normalize_data(filt_data)
+data,lbl = preprocessing.load_data(file_name, data_dir)
+filt_data = preprocessing.baseline_wander_removal(data)
+norm_data = preprocessing.normalize_data(filt_data)
 
-plt.figure()
-plt.plot(filt_data, color='b')
-plt.title('{} - Before normalization'.format(file_name))
-plt.figure()
-plt.plot(norm_data, color='b')
-plt.title('{} - After normalization'.format(file_name))
+preprocessing.plot_ecg(filt_data,lbl)
+preprocessing.plot_ecg(norm_data,lbl)
 
 """## Random Crop
 
@@ -140,11 +131,9 @@ for name in list(train_reference_df.index[:100]):
 
 #Example
 file_name = 'A02095'.encode()
-data = load_data(file_name, data_dir)
+data, lbl = preprocessing.load_data(file_name, data_dir)
 
-plt.figure()
-plt.plot(data)
-plt.title('Entire signal')
+preprocessing.plot_ecg(filt_data,lbl)
 
 """
 for i in range(3):
@@ -158,10 +147,9 @@ for i in range(3):
 
 # Example
 file_name = 'A00001'.encode()
-data = load_and_preprocess_data(file_name, data_dir)
+data, lbl = preprocessing.load_and_preprocess_data(file_name, data_dir)
 
-plt.figure()
-plt.plot(data)
+preprocessing.plot_ecg(filt_data,lbl)
 
 """# Data Augmentation """
 
@@ -201,7 +189,7 @@ summary(netD)
 `D_real` and `D_fake`. When it is hard for the discriminator to separate real and fake images, their values are close to 0.5.
 """
 
-epochs = 500
+epochs = 1000
 opt_g = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999))
 opt_d = torch.optim.Adam(netD.parameters(), lr=0.0002, betas=(0.5, 0.999))
 
@@ -248,12 +236,9 @@ samples = netG(z)
 
 samples = samples.squeeze()
 samples = samples.to('cpu')
-samples.shape
+test_sample = samples[4,:].detach().numpy()
 
-plt.figure()
-plt.plot(samples[4,:].detach().numpy(), color='b')
-plt.xlim([4000, 7000])
-plt.title('Synthetic - Noisy ECG')
+preprocessing.plot_ecg(test_sample, '~')
 
 torch.save(netG.state_dict(), '../gen_afib.pth')
 
@@ -261,8 +246,8 @@ torch.save(netG.state_dict(), '../gen_afib.pth')
 
 batch_size = 32
 
-train_set = PhysioNetDataset(ref = train_reference_df, data_dir = data_dir)
-val_set = PhysioNetDataset(ref = val_reference_df, data_dir = data_dir)
+train_set = preprocessing.PhysioNetDataset(ref = train_reference_df, data_dir = data_dir)
+val_set = preprocessing.PhysioNetDataset(ref = val_reference_df, data_dir = data_dir)
 
 train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2)
 val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=True, num_workers=2)
@@ -276,9 +261,8 @@ output_size = 4
 rnn_model = RNN.RNN(input_size, output_size).to(device)
 summary(rnn_model)
 
-
 optimizer = torch.optim.NAdam(rnn_model.parameters(), lr=0.001)
-criterion = FocalLoss()
+criterion = RNN.FocalLoss()
 
 epochs = 80
 
@@ -312,7 +296,7 @@ for epoch in range(epochs):
     train_acc.append(train_correct.float().item() / len(train_set))
     print("Epoch:", epoch+1, "Loss:", train_loss[-1], "Accuracy:", train_acc[-1])
 
-model = RNN(input_size, output_size)
+model = RNN.RNN(input_size, output_size)
 model.load_state_dict(torch.load('rnn1.pth', map_location=torch.device('cpu')))
 model.eval()
 
@@ -403,26 +387,3 @@ print("accuracy:", acc)
 print(TPR)
 print(TNR)
 print(PPV)
-
-fpr, tpr, _ = roc_curve(true_labels, labels_predicted)
-roc_auc = auc(fpr, tpr)
-
-plt.figure()
-plt.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
-plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
-plt.xlim([0.0, 1.0])
-plt.ylim([0.0, 1.05])
-plt.xlabel('False Positive Rate')
-plt.ylabel('True Positive Rate')
-plt.title('Receiver operating characteristic (ROC)')
-plt.legend(loc="lower right")
-
-prec, rec, _ = precision_recall_curve(true_labels, labels_predicted)
-
-plt.figure()
-plt.plot(prec, rec, color='darkorange', lw=2)
-plt.xlim([0.0, 1.0])
-plt.ylim([0.0, 1.05])
-plt.xlabel('Precision')
-plt.ylabel('Recall')
-plt.title('Precision-Recall Curve (PRC)')

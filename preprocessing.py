@@ -15,10 +15,10 @@ def load_data(file_name, data_dir):
     file_mat = data_dir.decode() + '/' + file_name.decode() + '.mat'
     data = loadmat(file_mat)['val']
     labels = reference_df["labels"]
-    lab = labels.loc[file_name]
-    return data.squeeze()
+    lab = labels.loc[file_name.decode()]
+    return data.squeeze(), lab
 
-def plot_ecg(data):
+def plot_ecg(data, lbl):
     dic = {'N': "Normal",
         'A' : "Atrial Fibrillation",
         '': "Abnormal ryhthm",
@@ -26,7 +26,8 @@ def plot_ecg(data):
     plt.figure()
     plt.plot(data, color='b')
     plt.xlim([4000, 7000]) 
-    plt.title('{} ECG'.format(file_name))
+    title = dic[lbl] + " " + file_name
+    plt.title('{} ECG'.format(title))
 
 def baseline_wander_removal(data):
     # Sampling frequency
@@ -74,7 +75,7 @@ def random_crop(data, target_size=9000, center_crop=False):
 
 def load_and_preprocess_data(file_name, data_dir):
     # Load data
-    data = load_data(file_name, data_dir)
+    data, lbl = load_data(file_name, data_dir)
     # Baseline wander removal
     data = baseline_wander_removal(data)
     # Normalize
@@ -82,7 +83,7 @@ def load_and_preprocess_data(file_name, data_dir):
     # Random Crop 
     data = random_crop(data, center_crop=True)
 
-    return data.astype(np.float32)
+    return data.astype(np.float32), lbl 
 
 
 """Loading the noisy samples"""
@@ -109,7 +110,7 @@ class PhysioNetDataset(Dataset):
           
         file_name = self.ref_frame.index[idx].encode()
 
-        data = load_and_preprocess_data(file_name, self.data_dir)
+        data,_ = load_and_preprocess_data(file_name, self.data_dir)
 
         sample = {'ecg': data, 'label': self.ref_frame.iloc[idx,1]}
 
@@ -130,7 +131,7 @@ class ImbalancedDataset(Dataset):
           
         file_name = self.ref_frame.index[idx].encode()
 
-        data = load_imbalance_data(file_name, self.data_dir)
+        data,_  = load_imbalance_data(file_name, self.data_dir)
 
         sample = {'ecg': data, 'label': self.ref_frame.iloc[idx,1]}
 
