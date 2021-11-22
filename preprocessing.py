@@ -5,16 +5,17 @@ import numpy as np
 from scipy.signal import medfilt
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from torch.utils.data import Dataset
 mpl.rcParams['figure.figsize'] = (16,10)
 mpl.rcParams['axes.grid'] = True
 mpl.rcParams['legend.fontsize'] = 'large'
 
 
-def load_data(file_name, data_dir):
+def load_data(file_name, data_dir, ref):
     # Load the ECG signal from the .mat file
     file_mat = data_dir.decode() + '/' + file_name.decode() + '.mat'
     data = loadmat(file_mat)['val']
-    labels = reference_df["labels"]
+    labels = ref["labels"]
     lab = labels.loc[file_name.decode()]
     return data.squeeze(), lab
 

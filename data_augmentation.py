@@ -1,11 +1,22 @@
 import pandas as pd
 import preprocessing
 import GAN
-import torch 
+import torch
+import os
+import zipfile
+from torch.utils.data import Dataset, DataLoader
+import torchinfo
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 
+# Define the data folder location
+data_dir = 'data'.encode()
+
+# Extract data from zip file
+if not os.path.exists(data_dir):
+    with zipfile.ZipFile('data.zip', 'r') as f:
+        f.extractall('.')
 
 reference_df = pd.read_csv('data/REFERENCE-v3.csv', names=['mat', 'label'], index_col=0)
 
