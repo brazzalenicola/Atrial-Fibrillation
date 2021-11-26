@@ -1,6 +1,7 @@
 from scipy.io import loadmat, savemat
 import pandas as pd
 import os
+import torch
 import numpy as np
 from scipy.signal import medfilt
 import matplotlib.pyplot as plt
@@ -11,23 +12,24 @@ mpl.rcParams['axes.grid'] = True
 mpl.rcParams['legend.fontsize'] = 'large'
 
 
-def load_data(file_name, data_dir, ref):
+def load_data(file_name, data_dir):
+    #ref = pd.read_csv('data/REFERENCE-v3.csv', names=['mat', 'label'], index_col=0)
     # Load the ECG signal from the .mat file
     file_mat = data_dir.decode() + '/' + file_name.decode() + '.mat'
     data = loadmat(file_mat)['val']
-    labels = ref["labels"]
-    lab = labels.loc[file_name.decode()]
-    return data.squeeze(), lab
+    #labs = ref["label"]
+    #lab = labs.loc[file_name.decode()]
+    return data.squeeze()#, lab
 
-def plot_ecg(data, lbl):
+def plot_ecg(data, file_name, lbl):
     dic = {'N': "Normal",
         'A' : "Atrial Fibrillation",
-        '': "Abnormal ryhthm",
+        'O': "Abnormal ryhthm",
         '~' : "Noisy"}
     plt.figure()
     plt.plot(data, color='b')
     plt.xlim([4000, 7000]) 
-    title = dic[lbl] + " " + file_name
+    title = str(dic[lbl]) + " " + file_name.decode()
     plt.title('{} ECG'.format(title))
 
 def baseline_wander_removal(data):
@@ -76,7 +78,7 @@ def random_crop(data, target_size=9000, center_crop=False):
 
 def load_and_preprocess_data(file_name, data_dir):
     # Load data
-    data, lbl = load_data(file_name, data_dir)
+    data = load_data(file_name, data_dir)
     # Baseline wander removal
     data = baseline_wander_removal(data)
     # Normalize
@@ -84,18 +86,11 @@ def load_and_preprocess_data(file_name, data_dir):
     # Random Crop 
     data = random_crop(data, center_crop=True)
 
-    return data.astype(np.float32), lbl 
+    return data.astype(np.float32)
+    
 
 
 """Loading the noisy samples"""
-
-def load_imbalance_data(file_name, data_dir):
-    # Load data
-    data = load_data(file_name, data_dir)
-    data = random_crop(data, target_size=9000, center_crop=True)
-
-    return data.astype(np.float32)
-
 
 class PhysioNetDataset(Dataset):
     def __init__(self, ref, data_dir):
@@ -111,7 +106,7 @@ class PhysioNetDataset(Dataset):
           
         file_name = self.ref_frame.index[idx].encode()
 
-        data,_ = load_and_preprocess_data(file_name, self.data_dir)
+        data = load_and_preprocess_data(file_name, self.data_dir)
 
         sample = {'ecg': data, 'label': self.ref_frame.iloc[idx,1]}
 
@@ -132,7 +127,7 @@ class ImbalancedDataset(Dataset):
           
         file_name = self.ref_frame.index[idx].encode()
 
-        data,_  = load_imbalance_data(file_name, self.data_dir)
+        data = load_imbalance_data(file_name, self.data_dir)
 
         sample = {'ecg': data, 'label': self.ref_frame.iloc[idx,1]}
 
