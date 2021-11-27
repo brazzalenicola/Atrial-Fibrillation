@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import data_utils, Dataset, DataLoader
 import torch
 from torchinfo import summary
+import sklearn
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import precision_recall_fscore_support, roc_curve, auc, accuracy_score, precision_recall_curve
 import preprocessing #NEW_FILE
@@ -37,13 +38,22 @@ if not os.path.exists(data_dir):
     with zipfile.ZipFile('data.zip', 'r') as f:
         f.extractall('.')
 
+#Load augmented dataframes
+afib_df = pd.read_csv('df_afib.csv', names=['mat', 'label', 'label_code'], index_col=0, header=0)
+noisy_df = pd.read_csv('df_noisy.csv', names=['mat', 'label', 'label_code'], index_col=0, header=0)
+augmented_df = afib_df.append(noisy_df)
+
 # Create a dataframe containing all the files and the labels from the reference file
 reference_df = pd.read_csv('data/REFERENCE-v3.csv', names=['mat', 'label'], index_col=0)
 
-# Replace 'N' with 0, 'A' with 1, 'O' with 2 and '~' with 3
+# Replace 'N' with 1, 'A' with 0, 'O' with 2 and '~' with 3
 reference_df['label'] = reference_df['label'].astype(str) #labels 'A','N','O','~'
 cate = pd.Categorical(reference_df['label'])
 reference_df['label_code'] = cate.codes #corresponding label code 
+
+#FINAL AUGMENTED DATASET
+reference_df = reference_df.append(augmented_df)
+
 
 """# Utils function"""
 
@@ -240,7 +250,7 @@ with torch.no_grad():
     for i, data in enumerate(val_loader):
         inputs = data['ecg'].to(device)
         labels = data['label'].to(device).long()
-        true_label.append(labels)
+        true_label.append(labels.to("cpu"))
         
         outputs = model(inputs)
         loss = criterion(outputs, labels)
@@ -248,14 +258,12 @@ with torch.no_grad():
         val_running_loss += loss.item() * outputs.shape[0]
 
         _, predicted = torch.max(outputs, dim=1)
-        labels_predicted.append(predicted) 
+        labels_predicted.append(predicted.to("cpu")) 
         val_correct += torch.sum(predicted == labels)
 
     val_loss.append(val_running_loss / len(val_set))
     val_acc.append(val_correct.float().item() / len(val_set))
-    print("Loss:", val_loss[-1], "Accuracy:", val_acc[-1])
-
-import sklearn
+    print("Loss:", val_loss, "Accuracy:", val_acc)
 
 true_labels = np.concatenate(true_label)
 labels_predicted = np.concatenate(labels_predicted)

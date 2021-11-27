@@ -20,13 +20,38 @@ if not os.path.exists(data_dir):
 
 reference_df = pd.read_csv('data/REFERENCE-v3.csv', names=['mat', 'label'], index_col=0)
 
-# Replace 'N' with 0, 'A' with 1, 'O' with 2 and '~' with 3
+# Replace 'N' with 1, 'A' with 0, 'O' with 2 and '~' with 3
 reference_df['label'] = reference_df['label'].astype(str) #labels 'A','N','O','~'
 cate = pd.Categorical(reference_df['label'])
 reference_df['label_code'] = cate.codes #corresponding label code 
 
+# Keep 20% of the data out for validation
+train_reference_df, val_reference_df = train_test_split(reference_df, test_size=0.2, stratify=reference_df['label'], random_state=seed)
 
-batch_size = 64
+# Count the elements in the sets
+num_train_data_normal = sum(train_reference_df['label_code'] == 1)
+num_train_data_afib   = sum(train_reference_df['label_code'] == 0)
+num_train_data_abnor = sum(train_reference_df['label_code'] == 2)
+num_train_data_noisy   = sum(train_reference_df['label_code'] == 3)
+
+num_val_data_normal   = sum(val_reference_df['label_code'] == 1)
+num_val_data_afib     = sum(val_reference_df['label_code'] == 0)
+num_val_data_abnor = sum(val_reference_df['label_code'] == 2)
+num_val_data_noisy   = sum(val_reference_df['label_code'] == 3)
+
+print('TRAIN SET')
+print('\tNormal ECG: {} ({:.2f}%)'.format(num_train_data_normal, 100 * num_train_data_normal / len(train_reference_df)))
+print('\tAfib ECG: {} ({:.2f}%)'.format(num_train_data_afib, 100 * num_train_data_afib / len(train_reference_df)))
+print('\tAbnormal ECG: {} ({:.2f}%)'.format(num_train_data_abnor, 100 * num_train_data_abnor / len(train_reference_df)))
+print('\tNoisy ECG: {} ({:.2f}%)'.format(num_train_data_noisy, 100 * num_train_data_noisy / len(train_reference_df)))
+
+print('VALIDATION SET')
+print('\tNormal ECG: {} ({:.2f}%)'.format(num_val_data_normal, 100 * num_val_data_normal / len(val_reference_df)))
+print('\tAfib ECG: {} ({:.2f}%)'.format(num_val_data_afib, 100 * num_val_data_afib / len(val_reference_df)))
+print('\tAbnormal ECG: {} ({:.2f}%)'.format(num_val_data_abnor, 100 * num_val_data_abnor / len(val_reference_df)))
+print('\tNoisy ECG: {} ({:.2f}%)'.format(num_val_data_noisy, 100 * num_val_data_noisy / len(val_reference_df)))
+
+batch_size = 32
 
 # 'N' -> 1, 'A'  ->  0, 'O'  ->  2 and '~'  ->  3
 trainset_noisy = preprocessing.ImbalancedDataset(ref = reference_df, data_dir = data_dir, label_code=3)
@@ -34,7 +59,7 @@ noisy_loader = DataLoader(trainset_noisy, batch_size=batch_size, shuffle=True, n
 
 
 trainset_afib = preprocessing.ImbalancedDataset(ref = reference_df, data_dir = data_dir, label_code=0)
-afib_loader = DataLoader(trainset_afib, batch_size=batch_size, shuffle=False, num_workers=2)
+afib_loader = DataLoader(trainset_afib, batch_size=batch_size, shuffle=True, num_workers=2)
 
 
 """## GAN for Data Augmentation
@@ -115,3 +140,11 @@ test_sample = samples[4,:].detach().numpy()
 preprocessing.plot_ecg(test_sample, '~')
 
 torch.save(netG.state_dict(), '../gen_afib.pth')
+
+
+model = GAN.Generator(nz=100, nc=1)
+model.load_state_dict(torch.load('gen_afib.pth', map_location=torch.device('cpu')))
+model.eval()
+
+z = torch.randn(758, 1, 100, device=device)
+samples = netG(z)
