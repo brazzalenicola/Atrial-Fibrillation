@@ -46,8 +46,8 @@ class Discriminator(nn.Module):
         """GAN discriminator.
         
         Args:
-          nc:  Number of channels in the negerator output.
-          ndf: Base size (number of channels) of the discriminator layers.
+          nc:  Number of channels in the generator output.
+          ndf: number of channels of the discriminator layers.
         """
 
         super(Discriminator, self).__init__()
@@ -87,7 +87,7 @@ class Discriminator(nn.Module):
 
 
 def generator_loss(netD, fake_samples):
-    """Loss computed to train the GAN generator.
+    """Loss computed to train the generator.
 
     Args:
       netD: The discriminator whose forward function takes inputs of shape (batch_size, 1, 9000)
@@ -96,10 +96,6 @@ def generator_loss(netD, fake_samples):
 
     Returns:
       loss: The mean of the binary cross-entropy losses computed for all the samples in the batch.
-
-    Notes:
-    - Make sure that you process on the device given by `fake_images.device`.
-    - Use values of global variables `real_label`, `fake_label` to produce the right targets.
     """
 
     batch_size = fake_samples.shape[0]
@@ -111,7 +107,7 @@ def generator_loss(netD, fake_samples):
     return loss
 
 def discriminator_loss(netD, real_samples, fake_samples):
-    """Loss computed to train the GAN discriminator.
+    """Loss computed to train the discriminator.
 
     Args:
       netD: The discriminator.

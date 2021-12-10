@@ -4,8 +4,15 @@ import GAN
 import torch
 import os
 import zipfile
+from torchinfo import summary
 from torch.utils.data import Dataset, DataLoader
 import torchinfo
+import matplotlib.pyplot as plt
+
+import matplotlib as mpl
+mpl.rcParams['figure.figsize'] = (16,10)
+mpl.rcParams['axes.grid'] = True
+mpl.rcParams['legend.fontsize'] = 'large'
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
@@ -23,7 +30,7 @@ reference_df = pd.read_csv('data/REFERENCE-v3.csv', names=['mat', 'label'], inde
 # Replace 'N' with 1, 'A' with 0, 'O' with 2 and '~' with 3
 reference_df['label'] = reference_df['label'].astype(str) #labels 'A','N','O','~'
 cate = pd.Categorical(reference_df['label'])
-reference_df['label_code'] = cate.codes #corresponding label code 
+reference_df['label_code'] = cate.codes #corresponding label code
 
 # Keep 20% of the data out for validation
 train_reference_df, val_reference_df = train_test_split(reference_df, test_size=0.2, stratify=reference_df['label'], random_state=seed)
@@ -61,11 +68,8 @@ noisy_loader = DataLoader(trainset_noisy, batch_size=batch_size, shuffle=True, n
 trainset_afib = preprocessing.ImbalancedDataset(ref = reference_df, data_dir = data_dir, label_code=0)
 afib_loader = DataLoader(trainset_afib, batch_size=batch_size, shuffle=True, num_workers=2)
 
-
-"""## GAN for Data Augmentation
-
-## Generator and generator loss
 """
+## Generator"""
 
 nz = 100
 netG = GAN.Generator(nz=nz, nc=1)
@@ -76,18 +80,23 @@ fake_label = 0.
 
 summary(netG)
 
-"""##Discriminator and generator-discriminator losses"""
+"""##Discriminator
+
+
+"""
 
 netD = GAN.Discriminator(nc=1, ndf=8)
 netD = netD.to(device)
 
 summary(netD)
 
-"""## GAN Training
+"""## GAN TRAINING
 
-`D_real` and `D_fake`. When it is hard for the discriminator to separate real and fake images, their values are close to 0.5.
+Here we can choose between afib_loader to learn to generate new afib samples or noisy_loader to learn noisy samples.
 """
 
+"""## GAN Training"""
+loader = afib_loader #or noisy_loader
 epochs = 1000
 opt_g = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999))
 opt_d = torch.optim.Adam(netD.parameters(), lr=0.0002, betas=(0.5, 0.999))
@@ -96,7 +105,7 @@ opt_d = torch.optim.Adam(netD.parameters(), lr=0.0002, betas=(0.5, 0.999))
 for ep in range(epochs):
     g_losses, d_losses = [], []
     D_real_list, D_fake_list = [], []
-    for i, data in enumerate(afib_loader):
+    for i, data in enumerate(loader):
         inputs = data['ecg'].to(device)
         labels = data['label'].to(device).long()
 
@@ -120,7 +129,7 @@ for ep in range(epochs):
 
         g_losses.append(g_loss.item())
         d_losses.append(d_loss.item())
-        D_real_list.append(D_real.item())
+        D_real_list.append(D_real.item()) #When it is hard for the discriminator to separate real and fake images, their values are close to 0.5.
         D_fake_list.append(D_fake.item())
     if ep % 100 == 0:
         print('Epoch {}'.format(ep+1))
@@ -129,18 +138,47 @@ for ep in range(epochs):
         print(' - Mean D_real: {}'.format(round(np.mean(D_real_list), 4)))
         print(' - Mean D_fake: {}'.format(round(np.mean(D_fake_list), 4)))
 
-#VISUAL TEST
-z = torch.randn(100, 1, 100, device=device)
+torch.save(netG.state_dict(), '../gen_afib.pth')
+#OR
+#torch.save(netG.state_dict(), '../gen_noisy.pth')
+
+"""## CREATION OF NEW NOISY SAMPLES"""
+
+model = GAN.Generator(nz=100, nc=1)
+model.load_state_dict(torch.load('gen_noisy.pth', map_location=torch.device('cpu')))
+model.eval()
+
+z = torch.randn(279, 1, 100, device=device)
 samples = netG(z)
 
-samples = samples.squeeze()
-samples = samples.to('cpu')
-test_sample = samples[4,:].detach().numpy()
+visual_test = samples[12,:].squeeze().detach().numpy()
+plt.figure()
+plt.plot(visual_test)
+plt.xlim([5000, 8000])
+plt.title('Synthetic Noisy ECG')
+#plt.savefig("synthetic_noisy.png")
 
-preprocessing.plot_ecg(test_sample, '~')
+file_names = list()
+for i in range(8529, 8529+279):
+    file_names.append("A0"+str(i))
 
-torch.save(netG.state_dict(), '../gen_afib.pth')
+label = np.repeat('~', 279)
+label_code = np.repeat(3, 279)
 
+data = {'mat': file_names, 'label': label, 'label_code': label_code}
+# Create Noisy DataFrame.
+df = pd.DataFrame(data)
+df_noisy = df.set_index('mat')
+
+"""### Save .mat files containing the generated examples"""
+
+for i in range(8529, 8529+279):
+    file_name = "afib_data/"+"A0"+str(i)+'.mat'
+    sampl = samples[i,:].detach().numpy()
+    mdic = {"val": sampl, "label": 'A'}
+    savemat(file_name, mdic)
+
+"""## CREATION OF NEW AFIB SAMPLES"""
 
 model = GAN.Generator(nz=100, nc=1)
 model.load_state_dict(torch.load('gen_afib.pth', map_location=torch.device('cpu')))
@@ -148,3 +186,38 @@ model.eval()
 
 z = torch.randn(758, 1, 100, device=device)
 samples = netG(z)
+
+visual_test = samples[2,:].squeeze().detach().numpy()
+plt.figure()
+plt.plot(visual_test)
+plt.xlim([5000, 8000])
+plt.title('Synthetic Afib ECG')
+#plt.savefig("synthetic_afib.png")
+
+file_names = list()
+for i in range(8808, 8808+758):
+    file_names.append("A0"+str(i))
+label = np.repeat('A', 758)
+label_code = np.repeat(0, 758)
+
+data_afib = {'mat': file_names, 'label': label, 'label_code': label_code}
+# Create AFib DataFrame.
+df = pd.DataFrame(data_afib)
+df_afib = df.set_index('mat')
+
+"""### Save .mat files containing the generated examples"""
+
+for i in range(8808, 8808+758):
+    file_name = "afib_data/"+"A0"+str(i)+'.mat'
+    sampl = samples[i,:].detach().numpy()
+    mdic = {"val": sampl, "label": '~'}
+    savemat(file_name, mdic)
+
+"""### Saving new data to the disk and the reference dataframes"""
+
+df_afib.to_csv('df_afib.csv',index=True)
+df_noisy.to_csv('df_noisy.csv',index=True)
+
+#!zip -r /content/afib_data.zip /content/afib_data
+
+#!zip -r /content/noisy_data.zip /content/noisy_data
