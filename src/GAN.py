@@ -103,7 +103,7 @@ def generator_loss(netD, fake_samples):
     pred = netD.forward(fake_samples)
     targets = (torch.ones(batch_size) * real_label).to(fake_samples.device)
 
-    loss = F.binary_cross_entropy(pred, targets)
+    loss = F.binary_cross_entropy(pred, targets) #does the mean by default
     return loss
 
 def discriminator_loss(netD, real_samples, fake_samples):
